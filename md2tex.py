@@ -15,7 +15,7 @@ def arg_parser():
     parser = argparse.ArgumentParser(description='Convert markdown to latex')
     parser.add_argument('--md-file', type=str, default='./report/report.md', help='The markdown file to be converted')
     parser.add_argument('--tex-file', type=str, default='./report/report.tex', help='The output tex file')
-    parser.add_argument('--template', type=str, default='./report/template.tex', help='The template tex file')
+    parser.add_argument('--template', type=str, help='The template tex file')
     parser.add_argument('--figure-pos', type=str, default='ht', help='The position of the figure')
     parser.add_argument('--table-pos', type=str, default='ht', help='The position of the table')
     return parser.parse_args()
@@ -206,18 +206,19 @@ def md_to_tex(md_content, args):
 
 def main():
     args = arg_parser()
-    with open(args.template, 'r', encoding='utf-8') as f:
-        template_content = f.read()
-    begin_marker = r'% ----- begin md -----'
-    end_marker = r'% ----- end md -----'
-    begin_index = template_content.find(begin_marker) + len(begin_marker)
-    end_index = template_content.find(end_marker)
-    template_begin = template_content[:begin_index]
-    template_end = template_content[end_index:]
     with open(args.md_file, 'r', encoding='utf-8') as f:
         md_content = f.read()
     tex_content = md_to_tex(md_content, args)
-    tex_content = template_begin + '\n' + tex_content + template_end
+    if args.template is not None:
+        with open(args.template, 'r', encoding='utf-8') as f:
+            template_content = f.read()
+        begin_marker = r'% ----- begin md -----'
+        end_marker = r'% ----- end md -----'
+        begin_index = template_content.find(begin_marker) + len(begin_marker)
+        end_index = template_content.find(end_marker)
+        template_begin = template_content[:begin_index]
+        template_end = template_content[end_index:]
+        tex_content = template_begin + '\n' + tex_content + template_end
     with open(args.tex_file, 'w', encoding='utf-8') as f:
         f.write(tex_content)
 

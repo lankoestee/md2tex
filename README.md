@@ -8,7 +8,9 @@
 
 只有一个文件，非常方便
 
-你需要准备三个文件，一是本仓库的`md2tex.py`文件，二是待转换文件`report.md`，三是tex模板文件`template.tex`。
+你需要准备两个必需文件和一个可选文件，一是本仓库的`md2tex.py`文件，二是待转换文件`report.md`，可选的是tex模板文件`template.tex`。
+
+当然，没有模板文件也是可以的，这样输出的文件无法被直接编译，但是方便其他文件进行调用。
 
 其中`template.tex`文件是一个模板文件，仅仅具备提供模板的功能，一个可用的template.tex如下所示，该文件在本仓库的`/report/template.tex`路径下。
 
