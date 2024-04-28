@@ -14,7 +14,7 @@ class env(Enum):
 def arg_parser():
     parser = argparse.ArgumentParser(description='Convert markdown to latex')
     parser.add_argument('--md-file', type=str, default='./report/report.md', help='The markdown file to be converted')
-    parser.add_argument('--tex-file', type=str, default='./report/report.tex', help='The output tex file')
+    parser.add_argument('--tex-file', type=str, help='The output tex file')
     parser.add_argument('--template', type=str, help='The template tex file')
     parser.add_argument('--figure-pos', type=str, default='ht', help='The position of the figure')
     parser.add_argument('--table-pos', type=str, default='ht', help='The position of the table')
@@ -219,6 +219,8 @@ def main():
         template_begin = template_content[:begin_index]
         template_end = template_content[end_index:]
         tex_content = template_begin + '\n' + tex_content + template_end
+    if args.tex_file is None:
+        args.tex_file = args.md_file.replace('.md', '.tex')
     with open(args.tex_file, 'w', encoding='utf-8') as f:
         f.write(tex_content)
 
