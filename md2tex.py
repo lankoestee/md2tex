@@ -1,5 +1,6 @@
 from enum import Enum, auto
 import re
+import os
 import time
 import argparse
 
@@ -19,6 +20,7 @@ def arg_parser():
     parser.add_argument('--template', type=str, help='The template tex file')
     parser.add_argument('--figure-pos', type=str, default='ht', help='The position of the figure')
     parser.add_argument('--table-pos', type=str, default='ht', help='The position of the table')
+    parser.add_argument('-o', action='store_true', help='Overwrite the existing tex file')
     return parser.parse_args()
 
 def tables_convert(tables, with_caption, args):
@@ -284,8 +286,21 @@ def main():
         tex_content = template_begin + '\n' + tex_content + template_end
     if args.tex_file is None:
         args.tex_file = args.md_file.replace('.md', '.tex')
+    if os.path.exists(args.tex_file) and not args.o:
+        print(f'File \"{args.tex_file}\" already exists, we add a suffix to the file name')
+        args.tex_file = args.tex_file.replace('.tex', ' (1).tex')
+        for i in range(1, 100):
+            if os.path.exists(args.tex_file):
+                args.tex_file = args.tex_file.replace(f'({i}).tex', f'({i+1}).tex')
+            else:
+                break
+        if i == 100:
+            print('\033[0;37;41m' + 'Error' + '\033[0m' + ' Too many files with the same name, please delete some files')
+            exit(1)
+
     with open(args.tex_file, 'w', encoding='utf-8') as f:
         f.write(tex_content)
+    print(f'Output file: \"{args.tex_file}\"')
 
 import time
 
@@ -294,7 +309,7 @@ if __name__ == '__main__':
     try:
         main()
         end_time = time.time()
-        print('\033[92m' + 'Conversion completed' + '\033[0m' + f' in \033[94m{end_time - start_time:.2f}\033[0m seconds')
+        print('\033[0;37;42m' + 'Info' + '\033[0m' + f' Conversion completed in \033[94m{end_time - start_time:.2f}\033[0m seconds')
     except Exception as e:
         print('\033[91m' + 'Conversion failed' + '\033[0m')
         print(e)
