@@ -169,6 +169,9 @@ def md_to_tex(md_content, args):
             tex_content += tex_line + '\n'
             continue
 
+        # *==label==* -> \label{label}
+        tex_line = re.sub(r'\*==(.*?)==\*', r'\\label{\1}', tex_line)
+
         # **text** -> \textbf{text}
         tex_line = re.sub(r'\*\*(.*?)\*\*', r'\\textbf{\1}', tex_line)
 
@@ -309,7 +312,7 @@ if __name__ == '__main__':
         end_time = time.time()
         print('\033[0;37;42m' + 'Info' + '\033[0m' + f' Conversion completed in \033[94m{end_time - start_time:.2f}\033[0m seconds')
     except Exception as e:
-        print('\033[91m' + 'Conversion failed' + '\033[0m')
+        print('\033[0;37;41m' + 'Error' + '\033[0m' + ' An error occurred during the conversion')
         print(e)
         exit(1)
         
