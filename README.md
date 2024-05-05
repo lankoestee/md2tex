@@ -67,4 +67,5 @@ python md2tex.py --md-file <input_file_path> --tex-file <output_file_path> --tem
 - 无法使用`_text_`表示斜体，请使用`*text*`以替代；
 - 暂时无法实现列表的嵌套功能，无论是有序列表还是无序列表；
 - 最后一行需要以正文结尾，尽量不要使用表格、列表等多行环境结尾；
-- 请使用Typora等Markdown编辑器配合VLOOK进行语法编辑，对于某些个性化写法无法支持；
+- 暂且无法支持任何HTML内嵌语；
+- 请使用[Typora](https://typora.io/)等Markdown编辑器配合[VLOOK](https://github.com/MadMaxChow/VLOOK)进行语法编辑，我们将这样所得到的语法视为标准语法，而对于某些个性化写法无法支持。
