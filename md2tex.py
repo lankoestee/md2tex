@@ -302,8 +302,6 @@ def main():
         f.write(tex_content)
     print(f'Output file: \"{args.tex_file}\"')
 
-import time
-
 if __name__ == '__main__':
     start_time = time.time()
     try:
