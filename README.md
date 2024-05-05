@@ -6,7 +6,13 @@
 
 ## 快速使用
 
-只有一个文件，非常方便
+```bash
+python md2tex.py --md-file <input_file_path>
+```
+
+没有任何感情，不带任何模板的使用。
+
+## 进阶使用
 
 你需要准备两个必需文件和一个可选文件，一是本仓库的`md2tex.py`文件，二是待转换文件`report.md`，可选的是tex模板文件`template.tex`。
 
@@ -51,15 +57,14 @@ python md2tex.py --md-file <input_file_path> --tex-file <output_file_path> --tem
 
 ## 实现功能
 
-下表列出了所实现的转换关系，其中，<span style="color:red">红色</span>部分的Markdown语法无法被渲染，仅是为了链接使用而设置。<span style="color:green">绿色</span>部分的Latex语法，也就是关于图片和表格的位置定位功能可以被改变。
+下表列出了所实现的转换关系，其中，<span style="color:red">红色</span>部分的Markdown语法无法被渲染，仅是为了链接使用而设置。<span style="color:green">绿色</span>部分的Latex语法，也就是关于图片和表格的位置定位功能可以被改变。[report.md](./report/report.md)详细展示了可以支持的语法类型。
 
-![](./figure/function.svg)
+![](./figure/function.png)
 
 ## 使用要求与不足
 
 - 在**正文**中不能够出现下划线`_`，若无法避免请使用`\_`替代；
 - 无法使用`_text_`表示斜体，请使用`*text*`以替代；
 - 暂时无法实现列表的嵌套功能，无论是有序列表还是无序列表；
-- 暂时无法为表格添加标题以及跳转标签；
 - 最后一行需要以正文结尾，尽量不要使用表格、列表等多行环境结尾；
-- 请使用Typora等Markdown编辑器进行语法编辑，对于某些个性化写法无法支持；
+- 请使用Typora等Markdown编辑器配合VLOOK进行语法编辑，对于某些个性化写法无法支持；
