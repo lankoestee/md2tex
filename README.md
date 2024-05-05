@@ -1,5 +1,7 @@
 # MD2TEX
 
+![Markdown](https://img.shields.io/badge/markdown-%23000000.svg?style=for-the-badge&logo=markdown&logoColor=white) ![LaTeX](https://img.shields.io/badge/latex-%23008080.svg?style=for-the-badge&logo=latex&logoColor=white) ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
+
 一个还在不断改进的Markdown转Latex工具，基于正则表达式。
 
 主要是由于pandoc用起来感觉十分奇怪，故自己写一个。
