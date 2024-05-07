@@ -20,7 +20,7 @@ python md2tex.py --md-file <input_file_path>
 
 ## 新功能！
 
-现在可以支持使用HTML语句进行文件的缩放了:smile:，当然这个缩放是在Typora的图片中使用右键点击缩放而来的！
+现在可以支持使用HTML语句进行文件的缩放了😀，当然这个缩放是在Typora的图片中使用右键点击缩放而来的！
 
 ## 进阶使用
 
