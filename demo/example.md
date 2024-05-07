@@ -18,7 +18,7 @@
 
 可以使用图片插入和图片引用跳转功能，如图[#fig1]所示。
 
-![fig1](./figure/latex_bird.png "Latex Bird")
+<img src="./figure/latex_bird.png" alt="fig1" style="zoom: 50%;" />
 
 可以插入表格，并识别对齐方式，并使用引用的跳转，如表[#tab1]所示。
 
@@ -43,6 +43,9 @@
 3. 内容三
 
 可以使用行间公式功能，但请使用标准latex公式格式书写其中内容。
+
+*==eq:1==*
+
 $$
 \begin{bmatrix}
 a & b \\ c & d
@@ -52,6 +55,11 @@ a & b \\ c & d
 e & f \\ g & h
 \end{matrix}
 $$
+
+$$
+E=mc^2
+$$
+
 可以使用行间代码功能，并识别语言。
 
 ```python

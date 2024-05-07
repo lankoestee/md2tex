@@ -1,6 +1,7 @@
 from enum import Enum, auto
 import re
 import os
+import html.parser as parser
 import time
 import argparse
 
@@ -13,6 +14,27 @@ class env(Enum):
     minted = auto()
     equation = auto()
 
+INFO = '\033[0;37;42mInfo\033[0m '
+WARN = '\033[0;37;43mWarning\033[0m '
+ERROR = '\033[0;37;41mError\033[0m '
+
+class MdHtmlParser(parser.HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tag = None
+        self.attrs = None
+    
+    def handle_starttag(self, tag, attrs):
+        self.tag = tag
+        self.attrs = dict(attrs)
+
+def has_html(line):
+    """
+    检查给定的字符串是否包含 HTML 标签。
+    """
+    html_pattern = r'<[^>]+>'
+    return bool(re.search(html_pattern, line))
+
 def arg_parser():
     parser = argparse.ArgumentParser(description='Convert markdown to latex')
     parser.add_argument('--md-file', type=str, default='report.md', help='The markdown file to be converted')
@@ -21,16 +43,17 @@ def arg_parser():
     parser.add_argument('--figure-pos', type=str, default='ht', help='The position of the figure')
     parser.add_argument('--table-pos', type=str, default='ht', help='The position of the table')
     parser.add_argument('-o', action='store_true', help='Overwrite the existing tex file')
+    parser.add_argument('-v', action='store_true', help='Use VLOOK style cross-reference, else pandoc style')
     return parser.parse_args()
 
+# 将markdown中的表格转换为latex格式
 def tables_convert(tables, with_caption, args):
-    
     def replace_func(match):
-            s = match.group(0).strip()
-            if s.isspace():
-                return r'\textbf{}'
-            else:
-                return r'\textbf{' + s + '}'
+        s = match.group(0).strip()
+        if s.isspace():
+            return r'\textbf{}'
+        else:
+            return r'\textbf{' + s + '}'
 
     ret_tables = []
     for table in tables:
@@ -90,14 +113,39 @@ def tables_convert(tables, with_caption, args):
         ret_tables.append(ret_table)
     return ret_tables
 
+def equations_convert(equations, with_caption, args):
+    ret_eqs = []
+    for eq in equations:
+        label = None
+        if with_caption:
+            label = eq[1]
+            eq = eq[2]
+        else:
+            eq = eq[1]
+        if re.match(r'^\s*\\begin{align}', eq):
+            eq = re.sub(r'^\s*\\begin{align}', r'\\begin{align*}', eq)
+            eq = re.sub(r'\\end{align}', r'\\end{align*}', eq)
+        # 删除eq最前面和最后面的换行符
+        eq = re.sub(r'^\n+|\n+$', '', eq)
+        if label:
+            ret_eq = f'{eq}\n\\label{{{label}}}'
+        else:
+            ret_eq = f'{eq}'
+        # 每行前面加上四个空格
+        ret_eq = re.sub(r'^', '    ', ret_eq, flags=re.MULTILINE)
+        ret_eq = "\\begin{equation}\n" + ret_eq + "\n\\end{equation}"
+        ret_eqs.append(ret_eq)
+    return ret_eqs
+
 def md_to_tex(md_content, args):
 
     # 提取带标题的表格内容
     table_label_pattern = re.compile(r"(\*==(.+?)==\*\n+\|.*?\|\n(\|.*?\|\n)+(\|.*?\|\n)*)", re.DOTALL)
     tables = table_label_pattern.findall(md_content)
-    tex_tables = tables_convert(tables, True, args)
-    for i in range(len(tables)):
-        md_content = md_content.replace(tables[i][0], tex_tables[i])
+    if tables:
+        tex_tables = tables_convert(tables, True, args)
+        for i in range(len(tables)):
+            md_content = md_content.replace(tables[i][0], tex_tables[i])
     
     # 提取不带标题的表格内容
     table_pattern = re.compile(r"(\|.*?\|\n(\|.*?\|\n)+(\|.*?\|\n)*)", re.DOTALL)
@@ -106,6 +154,22 @@ def md_to_tex(md_content, args):
         tex_tables = tables_convert(tables, False, args)
         for i in range(len(tables)):
             md_content = md_content.replace(tables[i][0], tex_tables[i])
+    
+    # 提取带标题的公式内容
+    equation_label_pattern = re.compile(r"(\*==(.+?)==\*\n+\$\$(.+?)\$\$)", re.DOTALL)
+    equations = equation_label_pattern.findall(md_content)
+    if equations:
+        tex_equations = equations_convert(equations, True, args)
+        for i in range(len(equations)):
+            md_content = md_content.replace(equations[i][0], tex_equations[i])
+        
+    # 提取不带标题的公式内容
+    equation_pattern = re.compile(r"(\$\$(.+?)\$\$)", re.DOTALL)
+    equations = equation_pattern.findall(md_content)
+    if equations:
+        tex_equations = equations_convert(equations, False, args)
+        for i in range(len(equations)):
+            md_content = md_content.replace(equations[i][0], tex_equations[i])
     
     # 检测是否有一级标题存在
     if re.match(r'^#\s', md_content):
@@ -143,26 +207,26 @@ def md_to_tex(md_content, args):
             continue
 
         # 处理公式块
-        if re.match(r'^\$\$', tex_line):
-            if env_stack[-1] != env.equation:
-                env_stack.append(env.equation)
-                # if next line is \begin{align}, then use align environment
-                if re.match(r'^\s*\\begin{align}', md_content[md_index + 1]):
-                    align_flag = True
-                else:
-                    tex_content += '\\begin{equation}\n'
-            else: 
-                env_stack.pop()
-                if align_flag:
-                    align_flag = False
-                else:
-                    tex_content += '\\end{equation}\n'
-            continue
+        # if re.match(r'^\$\$', tex_line):
+        #     if env_stack[-1] != env.equation:
+        #         env_stack.append(env.equation)
+        #         # if next line is \begin{align}, then use align environment
+        #         if re.match(r'^\s*\\begin{align}', md_content[md_index + 1]):
+        #             align_flag = True
+        #         else:
+        #             tex_content += '\\begin{equation}\n'
+        #     else: 
+        #         env_stack.pop()
+        #         if align_flag:
+        #             align_flag = False
+        #         else:
+        #             tex_content += '\\end{equation}\n'
+        #     continue
 
-        if re.match(r'^\s*\\begin{table}', tex_line):
-            env_stack.append(env.table)
-        if re.match(r'^\s*\\end{table}', tex_line):
-            env_stack.pop()
+        # if re.match(r'^\s*\\begin{table}', tex_line):
+        #     env_stack.append(env.table)
+        # if re.match(r'^\s*\\end{table}', tex_line):
+        #     env_stack.pop()
 
         # 如果当前处于代码块或公式块中，则直接将当前行加入tex_content
         if env_stack[-1] in [env.equation, env.minted]:
@@ -213,7 +277,8 @@ def md_to_tex(md_content, args):
         # tex_line = re.sub(r'(?<!\\)(?<!\\$)_', r'\\_', tex_line)
 
         # # % -> \%
-        tex_line = re.sub(r'[^\\]%', r'\\%', tex_line)
+        if not has_html(tex_line):
+            tex_line = re.sub(r'[^\\]%', r'\\%', tex_line)
 
         # [@reference] -> \cite{reference}
         tex_line = re.sub(r'\[@(.*?)\]', r'\\cite{\1}', tex_line)
@@ -234,6 +299,42 @@ def md_to_tex(md_content, args):
         # [label](url) -> \href{url}{label}
         tex_line = re.sub(r'\[(.*?)\]\((.*?)\)', r'\\href{\2}{\1}', tex_line)
 
+        # HTML标签处理
+        if has_html(tex_line):
+            # 将tex_line中的百分数转化为小数
+            # tex_line = re.sub(r'(\d+)%', r'\1\%', tex_line)
+            html_parser = MdHtmlParser()
+            html_parser.feed(tex_line)
+            tag = html_parser.tag
+            attrs = html_parser.attrs
+            html_line = ''
+            if tag == 'img':
+                if 'src' not in attrs:
+                    print(WARN + 'The img tag must have a src attribute, replace it with blank')
+                    tex_line = re.sub(r'<[^>]+>', '', tex_line)
+                else:
+                    html_line = r'\begin{figure}[' + args.figure_pos + ']\n    \centering\n    \includegraphics[width='
+                    if 'style' in attrs:
+                        zoom = re.search(r'zoom:\s+(\d+)%', attrs['style'])
+                        if zoom:
+                            html_line += f'{int(zoom.group(1)) / 100:.2f}\\textwidth'
+                        else:
+                            html_line += r'\textwidth'
+                    else:
+                        html_line += r'\textwidth'
+                    html_line += f']{{{attrs["src"]}}}\n'
+                    if 'title' in attrs:
+                        html_line += f'    \caption{{{attrs["title"]}}}\n'
+                    if 'alt' in attrs:
+                        html_line += f'    \label{{{attrs["alt"]}}}\n'
+                    html_line += r'\end{figure}'
+            else:
+                print(WARN + f'Unsupported HTML tag: {tag}, replace it without html format')
+                html_line = re.sub(r'<[^>]+>', '', tex_line)
+
+            tex_line = html_line
+
+
         # 处理无序列表
         if md_line.startswith('- '):
             if env_stack[-1] != env.itemize:
@@ -242,7 +343,9 @@ def md_to_tex(md_content, args):
             tex_line = re.sub(r'^\s*-\s+(.*)', r'    \\item \1', tex_line)
         else:
             if env_stack[-1] == env.itemize:
-                tex_content += '\\end{itemize}\n'
+                # 删除tex_content最后一个换行符
+                tex_content = tex_content[:-1]
+                tex_content += '\\end{itemize}\n\n'
                 env_stack.pop()
 
         # 处理有序列表
@@ -253,12 +356,14 @@ def md_to_tex(md_content, args):
             tex_line = re.sub(r'^\s*\d+\.\s+(.*)', r'    \\item \1', tex_line)
         else:
             if env_stack[-1] == env.enumerate:
-                tex_content += '\\end{enumerate}\n'
+                # 删除tex_content最后一个换行符
+                tex_content = tex_content[:-1]
+                tex_content += '\\end{enumerate}\n\n'
                 env_stack.pop()
         
         # 为每一段添加\par
-        if not tex_line.startswith('\\') and env_stack[-1] not in [env.itemize, env.enumerate, env.table]:
-            tex_line = '\\par ' + tex_line
+        # if not tex_line.startswith('\\') and env_stack[-1] not in [env.itemize, env.enumerate, env.table]:
+        #     tex_line = '\\par ' + tex_line
 
         tex_content += tex_line + '\n'
     
@@ -307,12 +412,12 @@ def main():
 
 if __name__ == '__main__':
     start_time = time.time()
-    try:
-        main()
-        end_time = time.time()
-        print('\033[0;37;42m' + 'Info' + '\033[0m' + f' Conversion completed in \033[94m{end_time - start_time:.2f}\033[0m seconds')
-    except Exception as e:
-        print('\033[0;37;41m' + 'Error' + '\033[0m' + ' An error occurred during the conversion')
-        print(e)
-        exit(1)
+    # try:
+    main()
+    end_time = time.time()
+    print(INFO + f'Conversion completed in \033[94m{end_time - start_time:.2f}\033[0m seconds')
+    # except Exception as e:
+    #     print(ERROR + 'An error occurred during the conversion')
+    #     print(e)
+    #     exit(1)
         
