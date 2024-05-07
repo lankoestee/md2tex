@@ -315,7 +315,7 @@ def md_to_tex(md_content, args):
                 else:
                     html_line = r'\begin{figure}[' + args.figure_pos + ']\n    \centering\n    \includegraphics[width='
                     if 'style' in attrs:
-                        zoom = re.search(r'zoom:\s+(\d+)%', attrs['style'])
+                        zoom = re.search(r'zoom:\s*(\d+)%', attrs['style'])
                         if zoom:
                             html_line += f'{int(zoom.group(1)) / 100:.2f}\\textwidth'
                         else:
