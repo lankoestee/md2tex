@@ -6,6 +6,8 @@
 
 主要是由于pandoc用起来感觉十分奇怪，故自己写一个。
 
+该工具也是本人报告写作方法的一部分，详见[舒适写作大法 | 大聪明de小妙招 (cleversmall.com)](https://cleversmall.com/posts/e06f63c1/)。
+
 ## 快速使用
 
 ```bash
