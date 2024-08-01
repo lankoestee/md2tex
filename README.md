@@ -16,13 +16,15 @@ python md2tex.py --md-file <input_file_path>
 
 没有任何感情，不带任何模板的使用。
 
-> [!IMPORTANT]
->
-> 转为Tex后的代码模块使用了`minted`包，Overleaf可以正常使用，但是本地配置稍麻烦
+或者使用Gradio进行交互式操作。
+
+```bash
+gradio app.py
+```
 
 ## 新功能！
 
-现在可以支持使用HTML语句进行文件的缩放了😀，当然这个缩放是在Typora的图片中使用右键点击缩放而来的！
+添加了一个可视化的Gradio交互界面😀
 
 ## 进阶使用
 

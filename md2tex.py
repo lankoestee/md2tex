@@ -11,7 +11,7 @@ class env(Enum):
     itemize = auto()
     enumerate = auto()
     table = auto()
-    minted = auto()
+    raw = auto()
     equation = auto()
 
 INFO = '\033[0;37;42mInfo\033[0m '
@@ -44,6 +44,9 @@ def arg_parser():
     parser.add_argument('--table-pos', type=str, default='ht', help='The position of the table')
     parser.add_argument('-o', action='store_true', help='Overwrite the existing tex file')
     parser.add_argument('-v', action='store_true', help='Use VLOOK style cross-reference, else pandoc style')
+    parser.add_argument("--spaces", type=int, default=4, help="Number of spaces for each indentation level")
+    parser.add_argument("--code-type", type=str, default="minted", help="How to handle code text")
+    parser.add_argument("-have-title", action="store_true", help="Whether the document has a title, if Ture, ‘#’ will not be translated and ‘##’ will translated into ‘\section’, else ‘#’ will be translated into ‘\section’.")
     return parser.parse_args()
 
 # 将markdown中的表格转换为latex格式
@@ -56,6 +59,7 @@ def tables_convert(tables, with_caption, args):
             return r'\textbf{' + s + '}'
 
     ret_tables = []
+    indent = ' ' * args.spaces  # 获取动态缩进
     for table in tables:
         label, caption = None, None
         table = table[0].split('\n')
@@ -84,9 +88,9 @@ def tables_convert(tables, with_caption, args):
                 caption = label_caption
         
         if caption:
-            ret_table = f'\\begin{{table}}[' + args.table_pos + f']\n    \centering\n    \\caption{{{caption}}}\n    \\begin{{tabular}}' + '{'
+            ret_table = f'\\begin{{table}}[' + args.table_pos + f']\n{indent}\centering\n{indent}\\caption{{{caption}}}\n{indent}\\begin{{tabular}}' + '{'
         else:
-            ret_table = f'\\begin{{table}}[' + args.table_pos + f']\n    \centering\n    \\begin{{tabular}}' + '{'
+            ret_table = f'\\begin{{table}}[' + args.table_pos + f']\n{indent}\centering\n{indent}\\begin{{tabular}}' + '{'
         aligns = re.findall(r':?-+:?|:-+|-+:', alignment)
         for align in aligns:
             if align.startswith(':') and align.endswith(':'):
@@ -95,7 +99,7 @@ def tables_convert(tables, with_caption, args):
                 ret_table += 'r'
             else:
                 ret_table += 'l'
-        ret_table += '}\n        \\toprule\n'
+        ret_table += f'}}\n{indent}{indent}\\toprule\n'
         # change the header to bold
         ret_header = re.sub(r'^\||\|$', '', re.sub(r'\|', ' & ', header))
         ret_header = re.sub(r'^\s*&|&\s*$', '', re.sub(r'\|', ' & ', header))
@@ -105,16 +109,17 @@ def tables_convert(tables, with_caption, args):
             ret_body = re.sub(r'^\||\|$', '', re.sub(r'\|', ' & ', body[i]))
             ret_body = re.sub(r'^\s*&|&\s*$', '', re.sub(r'\|', ' & ', body[i]))
             # ret_body = re.sub(r'[^&]+', replace_func, ret_body)
-            ret_table += '        ' + ret_body + ' \\\\\n'
+            ret_table += f'{indent}{indent}' + ret_body + ' \\\\\n'
         if label:
-            ret_table += f'        \\bottomrule\n    \end{{tabular}}\n    \label{{{label}}}\n\end{{table}}\n'
+            ret_table += f'{indent}{indent}\\bottomrule\n{indent}\end{{tabular}}\n{indent}\label{{{label}}}\n\end{{table}}\n'
         else:
-            ret_table += '        \\bottomrule\n    \end{tabular}\n\end{table}\n'
+            ret_table += f'{indent}{indent}\\bottomrule\n{indent}\end{{tabular}}\n\end{{table}}\n'
         ret_tables.append(ret_table)
     return ret_tables
 
 def equations_convert(equations, with_caption, args):
     ret_eqs = []
+    indent = ' ' * args.spaces  # 获取动态缩进
     for eq in equations:
         label = None
         if with_caption:
@@ -132,12 +137,14 @@ def equations_convert(equations, with_caption, args):
         else:
             ret_eq = f'{eq}'
         # 每行前面加上四个空格
-        ret_eq = re.sub(r'^', '    ', ret_eq, flags=re.MULTILINE)
+        ret_eq = re.sub(r'^', f'{indent}', ret_eq, flags=re.MULTILINE)
         ret_eq = "\\begin{equation}\n" + ret_eq + "\n\\end{equation}"
         ret_eqs.append(ret_eq)
     return ret_eqs
 
 def md_to_tex(md_content, args):
+    indent = ' ' * args.spaces  # 获取动态缩进
+    have_title = args.have_title
 
     # 提取带标题的表格内容
     table_label_pattern = re.compile(r"(\*==(.+?)==\*\n+\|.*?\|\n(\|.*?\|\n)+(\|.*?\|\n)*)", re.DOTALL)
@@ -176,6 +183,13 @@ def md_to_tex(md_content, args):
         level1 = True
     else:
         level1 = False
+    
+    if have_title:
+        level1 = False
+    
+    if level1 == False:
+        # 删除所有一级标题，将#以及后续文字及换行符删除
+        md_content = re.sub(r'^#\s.*\n*', '', md_content)
 
     # 将md_content按行分割
     md_content = md_content.split('\n')
@@ -197,12 +211,18 @@ def md_to_tex(md_content, args):
         # 处理代码块
         if re.match(r'^\s*```', tex_line):
             # 获取当前代码块的语言
-            if env_stack[-1] != env.minted:
+            if env_stack[-1] != env.raw:
                 lang = re.match(r'^\s*```(\w+)', tex_line).group(1)
-                tex_content += f'\\begin{{minted}}{{{lang}}}\n'
-                env_stack.append(env.minted)
+                if args.code_type == 'lstlisting':
+                    tex_content += f'\\begin{{lstlisting}}[language={lang}]\n'
+                else:
+                    tex_content += f'\\begin{{minted}}{{{lang}}}\n'
+                env_stack.append(env.raw)
             else:
-                tex_content += '\\end{minted}\n'
+                if args.code_type == 'lstlisting':
+                    tex_content += '\\end{lstlisting}\n'
+                else:
+                    tex_content += '\\end{minted}\n'
                 env_stack.pop()
             continue
 
@@ -229,7 +249,7 @@ def md_to_tex(md_content, args):
         #     env_stack.pop()
 
         # 如果当前处于代码块或公式块中，则直接将当前行加入tex_content
-        if env_stack[-1] in [env.equation, env.minted]:
+        if env_stack[-1] in [env.equation, env.raw]:
             tex_content += tex_line + '\n'
             continue
 
@@ -246,7 +266,10 @@ def md_to_tex(md_content, args):
         # tex_line = re.sub(r'_(.*?)_', r'\\textit{\1}', tex_line)
 
         # `code` -> \mintinline{code}
-        tex_line = re.sub(r'`(.*?)`', r'\\mintinline{text}|\1|', tex_line)
+        if args.code_type == 'lstlisting':
+            tex_line = re.sub(r'`(.*?)`', r'\\verb|\1|', tex_line)
+        else:
+            tex_line = re.sub(r'`(.*?)`', r'\\mintinline{text}|\1|', tex_line)
 
         # 根据是否有一级标题进行处理
         if level1:
@@ -286,15 +309,31 @@ def md_to_tex(md_content, args):
         # [#label] -> \ref{label}
         tex_line = re.sub(r'\[#(.*?)\]', r'\\ref{\1}', tex_line)
         
-        # 处理图片
-        # ![label](img_path "caption") -> \begin{figure}[args.figure_pos]\n    \centering\n    \includegraphics[width=\textwidth]{img_path}\n    \caption{caption}\n    \label{label}\n\end{figure}
-        tex_line = re.sub(r'!\[(.*?)\]\((.*?)\s*"(.*?)"\)', r'\\begin{figure}[' + args.figure_pos + r']\n    \\centering\n    \\includegraphics[width=\\textwidth]{\2}\n    \\caption{\3}\n    \\label{\1}\n\\end{figure}', tex_line)
-        # ![label](img_path) -> \begin{figure}[args.figure_pos]\n    \centering\n    \includegraphics[width=\textwidth]{img_path}\n    \label{label}\n\end{figure}
-        tex_line = re.sub(r'!\[(.*?)\]\((.*?)\)', r'\\begin{figure}[' + args.figure_pos + r']\n    \\centering\n    \\includegraphics[width=\\textwidth]{\2}\n    \\label{\1}\n\\end{figure}', tex_line)
+        # 处理图片，顺序不要颠倒
         # ![](img_path "caption") -> \begin{figure}[args.figure_pos]\n    \centering\n    \includegraphics[width=\textwidth]{img_path}\n    \caption{caption}\\n\end{figure}
-        tex_line = re.sub(r'!\[\]\((.*?)\s*"(.*?)"\)', r'\\begin{figure}[' + args.figure_pos + r']\n    \\centering\n    \\includegraphics[width=\\textwidth]{\1}\n    \\caption{\2}\n\\end{figure}', tex_line)
+        tex_line = re.sub(
+            r'!\[\]\((.*?)\s*"(.*?)"\)',
+            r'\\begin{figure}[' + args.figure_pos + r']\n' + indent + r'\\centering\n' + indent + r'\\includegraphics[width=\\textwidth]{\1}\n' + indent + r'\\caption{\2}\n' + r'\\end{figure}',
+            tex_line
+        )
         # ![](img_path) -> \begin{figure}[args.figure_pos]\n    \centering\n    \includegraphics[width=\textwidth]{img_path}\n\end{figure}
-        tex_line = re.sub(r'!\[\]\((.*?)\)', r'\\begin{figure}[' + args.figure_pos + r']\n    \\centering\n    \\includegraphics[width=\\textwidth]{\1}\n\\end{figure}', tex_line)
+        tex_line = re.sub(
+            r'!\[\]\((.*?)\)',
+            r'\\begin{figure}[' + args.figure_pos + r']\n' + indent + r'\\centering\n' + indent + r'\\includegraphics[width=\\textwidth]{\1}\n' + r'\\end{figure}',
+            tex_line
+        )
+        # ![label](img_path "caption") -> \begin{figure}[args.figure_pos]\n    \centering\n    \includegraphics[width=\textwidth]{img_path}\n    \caption{caption}\n    \label{label}\n\end{figure}
+        tex_line = re.sub(
+            r'!\[(.*?)\]\((.*?)\s*"(.*?)"\)',
+            r'\\begin{figure}[' + args.figure_pos + r']\n' + indent + r'\\centering\n' + indent + r'\\includegraphics[width=\\textwidth]{\2}\n' + indent + r'\\caption{\3}\n' + indent + r'\\label{\1}\n' + r'\\end{figure}',
+            tex_line
+        )
+        # ![label](img_path) -> \begin{figure}[args.figure_pos]\n    \centering\n    \includegraphics[width=\textwidth]{img_path}\n    \label{label}\n\end{figure}
+        tex_line = re.sub(
+            r'!\[(.*?)\]\((.*?)\)',
+            r'\\begin{figure}[' + args.figure_pos + r']\n' + indent + r'\\centering\n' + indent + r'\\includegraphics[width=\\textwidth]{\2}\n' + indent + r'\\label{\1}\n' + r'\\end{figure}',
+            tex_line
+        )
 
         # [label](url) -> \href{url}{label}
         tex_line = re.sub(r'\[(.*?)\]\((.*?)\)', r'\\href{\2}{\1}', tex_line)
@@ -313,7 +352,7 @@ def md_to_tex(md_content, args):
                     print(WARN + 'The img tag must have a src attribute, replace it with blank')
                     tex_line = re.sub(r'<[^>]+>', '', tex_line)
                 else:
-                    html_line = r'\begin{figure}[' + args.figure_pos + ']\n    \centering\n    \includegraphics[width='
+                    html_line = r'\begin{figure}[' + args.figure_pos + f']\n{indent}\centering\n{indent}\includegraphics[width='
                     if 'style' in attrs:
                         zoom = re.search(r'zoom:\s*(\d+)%', attrs['style'])
                         if zoom:
@@ -324,9 +363,9 @@ def md_to_tex(md_content, args):
                         html_line += r'\textwidth'
                     html_line += f']{{{attrs["src"]}}}\n'
                     if 'title' in attrs:
-                        html_line += f'    \caption{{{attrs["title"]}}}\n'
+                        html_line += f'{indent}\caption{{{attrs["title"]}}}\n'
                     if 'alt' in attrs:
-                        html_line += f'    \label{{{attrs["alt"]}}}\n'
+                        html_line += f'{indent}\label{{{attrs["alt"]}}}\n'
                     html_line += r'\end{figure}'
             else:
                 print(WARN + f'Unsupported HTML tag: {tag}, replace it without html format')
@@ -340,7 +379,7 @@ def md_to_tex(md_content, args):
             if env_stack[-1] != env.itemize:
                 tex_content += '\\begin{itemize}\n'
                 env_stack.append(env.itemize)
-            tex_line = re.sub(r'^\s*-\s+(.*)', r'    \\item \1', tex_line)
+            tex_line = re.sub(r'^\s*-\s+(.*)', indent + r'\\item \1', tex_line)
         else:
             if env_stack[-1] == env.itemize:
                 # 删除tex_content最后一个换行符
@@ -353,7 +392,7 @@ def md_to_tex(md_content, args):
             if env_stack[-1] != env.enumerate:
                 tex_content += '\\begin{enumerate}\n'
                 env_stack.append(env.enumerate)
-            tex_line = re.sub(r'^\s*\d+\.\s+(.*)', r'    \\item \1', tex_line)
+            tex_line = re.sub(r'^\s*\d+\.\s+(.*)', indent + r'\\item \1', tex_line)
         else:
             if env_stack[-1] == env.enumerate:
                 # 删除tex_content最后一个换行符
@@ -397,12 +436,12 @@ def main():
     if os.path.exists(args.tex_file) and not args.o:
         print(f'File \"{args.tex_file}\" already exists, we add a suffix to the file name')
         args.tex_file = args.tex_file.replace('.tex', ' (1).tex')
-        for i in range(1, 100):
+        for i in range(1, 100000):
             if os.path.exists(args.tex_file):
                 args.tex_file = args.tex_file.replace(f'({i}).tex', f'({i+1}).tex')
             else:
                 break
-        if i == 100:
+        if i == 100000:
             print('\033[0;37;41m' + 'Error' + '\033[0m' + ' Too many files with the same name, please delete some files')
             exit(1)
 
