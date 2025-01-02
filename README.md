@@ -2,11 +2,9 @@
 
 ![Markdown](https://img.shields.io/badge/markdown-%23000000.svg?style=for-the-badge&logo=markdown&logoColor=white) ![LaTeX](https://img.shields.io/badge/latex-%23008080.svg?style=for-the-badge&logo=latex&logoColor=white) ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 
-一个还在不断改进的Markdown转Latex工具，基于正则表达式。
+一个小小的Markdown转Latex工具，基于正则表达式。
 
 主要是由于pandoc用起来感觉十分奇怪，故自己写一个。
-
-该工具也是本人报告写作方法的一部分，详见[舒适写作大法 | 大聪明de小妙招 (cleversmall.com)](https://cleversmall.com/posts/e06f63c1/)。
 
 ## 快速使用
 
@@ -21,10 +19,6 @@ python md2tex.py --md-file <input_file_path>
 ```bash
 gradio app.py
 ```
-
-## 新功能！
-
-添加了一个可视化的Gradio交互界面😀
 
 ## 进阶使用
 
@@ -88,4 +82,3 @@ python md2tex.py --md-file <input_file_path> --tex-file <output_file_path> --tem
 - 暂时无法实现列表的嵌套功能，无论是有序列表还是无序列表；
 - 最后一行需要以正文结尾，尽量不要使用表格、列表等多行环境结尾；
 - 暂且仅支持img的HTML语句；
-- 请使用[Typora](https://typora.io/)等Markdown编辑器配合[VLOOK](https://github.com/MadMaxChow/VLOOK)进行语法编辑，我们将这样所得到的语法视为标准语法，而对于某些个性化写法无法支持。
