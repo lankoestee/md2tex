@@ -31,7 +31,7 @@ class MdHtmlParser(parser.HTMLParser):
             self.attrs = dict(attrs)
 
 KNOWN_INLINE_HTML_TAGS = {
-    'img', 'a', 'br', 'hr', 'span', 'strong', 'em', 'code'
+    'img', 'a', 'br', 'hr', 'span', 'strong', 'em', 'code', 'u', 'font'
 }
 
 MATH_INLINE_PATTERN = re.compile(r'\$(?:[^$\\]|\\.)+\$')  # $...$ with simple escaping
@@ -339,6 +339,19 @@ def md_to_tex(md_content, args):
         # (Already masked, so we transform after unmask)
 
         tex_line = _unmask(masked_line, repls)
+
+        # Support underline <u>...</u>
+        def _u_repl(m):
+            inner = m.group(1).strip()
+            return f'\\underline{{{inner}}}'
+        tex_line = re.sub(r'<u[^>]*>(.+?)</u>', _u_repl, tex_line, flags=re.IGNORECASE)
+
+        # Support <font color=...>...</font> (simplified); require \usepackage{xcolor} in template
+        def _font_repl(m):
+            color = m.group(1)
+            inner = m.group(2).strip()
+            return f'\\textcolor{{{color}}}{{{inner}}}'
+        tex_line = re.sub(r'<font[^>]*?color\s*=\s*["\']?([A-Za-z]+)["\']?[^>]*>(.+?)</font>', _font_repl, tex_line, flags=re.IGNORECASE)
 
         # `code` -> inline code formatting (now safe because math restored)
         if args.code_type == 'lstlisting':

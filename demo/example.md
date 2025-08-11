@@ -68,3 +68,5 @@ print("Hello World")
 ```
 
 还有好多功能理论上，后面慢慢加吧
+
+可以使用新的内联 HTML 支持：如下 <u> 下划线文本 </u> 与 <font color=Red> 红色文本 </font> 示例。其中数学 $x<y$ 不会被误判。
