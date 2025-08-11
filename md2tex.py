@@ -1,9 +1,10 @@
-from enum import Enum, auto
-import re
-import os
-import html.parser as parser
-import time
 import argparse
+import html.parser as parser
+import os
+import re
+import time
+from enum import Enum, auto
+
 
 class env(Enum):
     document = auto()
@@ -19,21 +20,60 @@ WARN = '\033[0;37;43mWarning\033[0m '
 ERROR = '\033[0;37;41mError\033[0m '
 
 class MdHtmlParser(parser.HTMLParser):
+    """Tiny HTML start tag collector (only first tag is kept)."""
     def __init__(self):
         super().__init__()
         self.tag = None
         self.attrs = None
-    
     def handle_starttag(self, tag, attrs):
-        self.tag = tag
-        self.attrs = dict(attrs)
+        if self.tag is None:  # only record the first for efficiency
+            self.tag = tag
+            self.attrs = dict(attrs)
+
+KNOWN_INLINE_HTML_TAGS = {
+    'img', 'a', 'br', 'hr', 'span', 'strong', 'em', 'code'
+}
+
+MATH_INLINE_PATTERN = re.compile(r'\$(?:[^$\\]|\\.)+\$')  # $...$ with simple escaping
+
+def _mask_segments(pattern, text, placeholder_prefix):
+    """Mask segments matched by pattern to protect them from downstream regex replacements.
+    Returns masked_text, list of (placeholder, original_text)."""
+    replacements = []
+    def repl(match):
+        placeholder = f'__{placeholder_prefix}{len(replacements)}__'
+        replacements.append((placeholder, match.group(0)))
+        return placeholder
+    masked = pattern.sub(repl, text)
+    return masked, replacements
+
+def _unmask(text, replacements):
+    for placeholder, original in replacements:
+        text = text.replace(placeholder, original)
+    return text
+
+def mask_math_and_code(line):
+    """Mask inline math $...$ and code `...` blocks to avoid accidental formatting or HTML detection."""
+    masked, math_repls = _mask_segments(MATH_INLINE_PATTERN, line, 'MATH')
+    code_pattern = re.compile(r'`[^`]+`')
+    masked, code_repls = _mask_segments(code_pattern, masked, 'CODE')
+    return masked, math_repls + code_repls
 
 def has_html(line):
+    """More conservative HTML detection that ignores content inside math/code placeholders.
+    We only consider as HTML if a known tag begins with <tag ...> or <tag>.
+    Angle brackets in math like $a<b$ or vector notation <x,y> will NOT be treated as HTML.
     """
-    检查给定的字符串是否包含 HTML 标签。
-    """
-    html_pattern = r'<[^>]+>'
-    return bool(re.search(html_pattern, line))
+    if '<' not in line or '>' not in line:
+        return False
+    # Quick reject: ignore placeholders
+    tmp = line
+    # Recognize minimal pattern: <tag ...>
+    candidate_tags = re.findall(r'<\s*([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>', tmp)
+    for t in candidate_tags:
+        if t.lower() in KNOWN_INLINE_HTML_TAGS:
+            return True
+    return False
 
 def arg_parser():
     parser = argparse.ArgumentParser(description='Convert markdown to latex')
@@ -46,7 +86,12 @@ def arg_parser():
     parser.add_argument('-v', action='store_true', help='Use VLOOK style cross-reference, else pandoc style')
     parser.add_argument("--spaces", type=int, default=4, help="Number of spaces for each indentation level")
     parser.add_argument("--code-type", type=str, default="minted", help="How to handle code text")
-    parser.add_argument("-have-title", action="store_true", help="Whether the document has a title, if Ture, ‘#’ will not be translated and ‘##’ will translated into ‘\section’, else ‘#’ will be translated into ‘\section’.")
+    parser.add_argument(
+        "-have-title",
+        action="store_true",
+        help=("Whether the document has a title; if True, '#' remains plain and '##' becomes \\section; "
+              "otherwise '#' becomes \\section."),
+    )
     return parser.parse_args()
 
 # 将markdown中的表格转换为latex格式
@@ -88,9 +133,18 @@ def tables_convert(tables, with_caption, args):
                 caption = label_caption
         
         if caption:
-            ret_table = f'\\begin{{table}}[' + args.table_pos + f']\n{indent}\centering\n{indent}\\caption{{{caption}}}\n{indent}\\begin{{tabular}}' + '{'
+            ret_table = (
+                f"\\begin{{table}}[" + args.table_pos + f"]\n"
+                f"{indent}\\centering\n"
+                f"{indent}\\caption{{{caption}}}\n"
+                f"{indent}\\begin{{tabular}}" + '{'
+            )
         else:
-            ret_table = f'\\begin{{table}}[' + args.table_pos + f']\n{indent}\centering\n{indent}\\begin{{tabular}}' + '{'
+            ret_table = (
+                f"\\begin{{table}}[" + args.table_pos + f"]\n"
+                f"{indent}\\centering\n"
+                f"{indent}\\begin{{tabular}}" + '{'
+            )
         aligns = re.findall(r':?-+:?|:-+|-+:', alignment)
         for align in aligns:
             if align.startswith(':') and align.endswith(':'):
@@ -111,9 +165,18 @@ def tables_convert(tables, with_caption, args):
             # ret_body = re.sub(r'[^&]+', replace_func, ret_body)
             ret_table += f'{indent}{indent}' + ret_body + ' \\\\\n'
         if label:
-            ret_table += f'{indent}{indent}\\bottomrule\n{indent}\end{{tabular}}\n{indent}\label{{{label}}}\n\end{{table}}\n'
+            ret_table += (
+                f"{indent}{indent}\\bottomrule\n"
+                f"{indent}\\end{{tabular}}\n"
+                f"{indent}\\label{{{label}}}\n"
+                f"\\end{{table}}\n"
+            )
         else:
-            ret_table += f'{indent}{indent}\\bottomrule\n{indent}\end{{tabular}}\n\end{{table}}\n'
+            ret_table += (
+                f"{indent}{indent}\\bottomrule\n"
+                f"{indent}\\end{{tabular}}\n"
+                f"\\end{{table}}\n"
+            )
         ret_tables.append(ret_table)
     return ret_tables
 
@@ -248,28 +311,40 @@ def md_to_tex(md_content, args):
         # if re.match(r'^\s*\\end{table}', tex_line):
         #     env_stack.pop()
 
-        # 如果当前处于代码块或公式块中，则直接将当前行加入tex_content
+        # Detect entering / leaving standard math environments produced earlier
+        if re.match(r'^\\begin{(equation|align\*?|gather\*?)}', tex_line):
+            env_stack.append(env.equation)
+        if re.match(r'^\\end{(equation|align\*?|gather\*?)}', tex_line):
+            if env_stack and env_stack[-1] == env.equation:
+                env_stack.pop()
+
+        # 如果当前处于代码块或公式块中（equation env），直接写入
         if env_stack[-1] in [env.equation, env.raw]:
             tex_content += tex_line + '\n'
             continue
 
+        # --- Inline formatting (protect math & code first) ---
+        masked_line, repls = mask_math_and_code(tex_line)
+
         # *==label==* -> \label{label}
-        tex_line = re.sub(r'\*==(.*?)==\*', r'\\label{\1}', tex_line)
+        masked_line = re.sub(r'\*==(.*?)==\*', r'\\label{\1}', masked_line)
 
         # **text** -> \textbf{text}
-        tex_line = re.sub(r'\*\*(.*?)\*\*', r'\\textbf{\1}', tex_line)
+        masked_line = re.sub(r'\*\*(.*?)\*\*', r'\\textbf{\1}', masked_line)
 
-        # *text* -> \textit{text}
-        tex_line = re.sub(r'\*(.*?)\*', r'\\textit{\1}', tex_line)
+        # *text* -> \textit{text} (avoid conflicts with already converted **)
+        masked_line = re.sub(r'(?<!\\)\*(?!\*)([^*]+?)\*(?!\*)', r'\\textit{\1}', masked_line)
 
-        # _text_ -> \textit{text}
-        # tex_line = re.sub(r'_(.*?)_', r'\\textit{\1}', tex_line)
+        # inline code placeholders are restored later; convert actual inline code to minted/verb
+        # (Already masked, so we transform after unmask)
 
-        # `code` -> \mintinline{code}
+        tex_line = _unmask(masked_line, repls)
+
+        # `code` -> inline code formatting (now safe because math restored)
         if args.code_type == 'lstlisting':
-            tex_line = re.sub(r'`(.*?)`', r'\\verb|\1|', tex_line)
+            tex_line = re.sub(r'`([^`]+?)`', r'\\verb|\1|', tex_line)
         else:
-            tex_line = re.sub(r'`(.*?)`', r'\\mintinline{text}|\1|', tex_line)
+            tex_line = re.sub(r'`([^`]+?)`', r'\\mintinline{text}|\1|', tex_line)
 
         # 根据是否有一级标题进行处理
         if level1:
@@ -301,7 +376,7 @@ def md_to_tex(md_content, args):
 
         # # % -> \%
         if not has_html(tex_line):
-            tex_line = re.sub(r'[^\\]%', r'\\%', tex_line)
+            tex_line = re.sub(r'([^\\])%', r'\1\\%', tex_line)
 
         # [@reference] -> \cite{reference}
         tex_line = re.sub(r'\[@(.*?)\]', r'\\cite{\1}', tex_line)
@@ -338,21 +413,21 @@ def md_to_tex(md_content, args):
         # [label](url) -> \href{url}{label}
         tex_line = re.sub(r'\[(.*?)\]\((.*?)\)', r'\\href{\2}{\1}', tex_line)
 
-        # HTML标签处理
+        # HTML标签处理 (after other inline conversions to avoid impacting replacements)
         if has_html(tex_line):
-            # 将tex_line中的百分数转化为小数
-            # tex_line = re.sub(r'(\d+)%', r'\1\%', tex_line)
             html_parser = MdHtmlParser()
             html_parser.feed(tex_line)
             tag = html_parser.tag
-            attrs = html_parser.attrs
-            html_line = ''
+            attrs = html_parser.attrs or {}
             if tag == 'img':
                 if 'src' not in attrs:
-                    print(WARN + 'The img tag must have a src attribute, replace it with blank')
+                    print(WARN + 'The img tag must have a src attribute, replaced with blank content')
                     tex_line = re.sub(r'<[^>]+>', '', tex_line)
                 else:
-                    html_line = r'\begin{figure}[' + args.figure_pos + f']\n{indent}\centering\n{indent}\includegraphics[width='
+                    # Build figure environment string (avoid raw string escape warnings)
+                    html_line = ('\\begin{figure}[' + args.figure_pos + f']\n'
+                                  f'{indent}\\centering\n'
+                                  f'{indent}\\includegraphics[width=')
                     if 'style' in attrs:
                         zoom = re.search(r'zoom:\s*(\d+)%', attrs['style'])
                         if zoom:
@@ -363,15 +438,14 @@ def md_to_tex(md_content, args):
                         html_line += r'\textwidth'
                     html_line += f']{{{attrs["src"]}}}\n'
                     if 'title' in attrs:
-                        html_line += f'{indent}\caption{{{attrs["title"]}}}\n'
+                        html_line += f'{indent}\\caption{{{attrs["title"]}}}\n'
                     if 'alt' in attrs:
-                        html_line += f'{indent}\label{{{attrs["alt"]}}}\n'
-                    html_line += r'\end{figure}'
+                        html_line += f'{indent}\\label{{{attrs["alt"]}}}\n'
+                    html_line += '\\end{figure}'
+                    tex_line = html_line
             else:
-                print(WARN + f'Unsupported HTML tag: {tag}, replace it without html format')
-                html_line = re.sub(r'<[^>]+>', '', tex_line)
-
-            tex_line = html_line
+                print(WARN + f'Unsupported HTML tag: {tag}, stripped.')
+                tex_line = re.sub(r'<[^>]+>', '', tex_line)
 
 
         # 处理无序列表
