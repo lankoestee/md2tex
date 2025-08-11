@@ -1,11 +1,3 @@
-\documentclass{ctexart} % 支持ctexart, article
-\usepackage{subcaption,hyperref,booktabs,float,amsmath,graphicx}
-\usepackage[cache=false]{minted}
-% 上面是必要的包
-
-\begin{document}
-
-% ----- begin md -----
 \section{如果没有一级标题，那么这就是一级标题}
 
 \subsection{这是二级标题}
@@ -18,7 +10,7 @@
 
 可以使用Latex的相关行内公式，如$a^2+b^2=c^2$。
 
-可以使用行内代码，但是需要注意的是行内代码不区分代码语言，如\mintinline{text}|print("Hello World")|。
+可以使用行内代码，但是需要注意的是行内代码不区分代码语言，如 \mintinline{text}|print("Hello World")|。
 
 可以使用超链接功能，如\href{https://www.cleversmall.com}{Cleversmall}。
 
@@ -41,8 +33,8 @@
         \toprule
         \textbf{标题1}&\textbf{这里居中对齐}&\textbf{标题2} \\
         \midrule
-          右对齐了  &     内容2      &  左对齐了   \\
-                    &     内容3      &             \\
+          右对齐了  &     内容2     &  左对齐了   \\
+                    &     内容3     &             \\
         \bottomrule
     \end{tabular}
     \label{tab1}
@@ -78,7 +70,7 @@
 \end{equation}
 
 \begin{equation}
-    E=mc^2
+    a<b, c>d, e\in (0,1)
 \end{equation}
 
 可以使用行间代码功能，并识别语言。
@@ -91,10 +83,3 @@ print("Hello World")
 
 还有好多功能理论上，后面慢慢加吧
 
-
-% ----- end md -----
-
-\bibliographystyle{ieeetr}
-\clearpage
-\bibliography{reference}
-\end{document}
